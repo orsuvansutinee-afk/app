@@ -2,7 +2,7 @@
 // API Client — Google Apps Script Backend
 // ============================================================
 
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxY1b75CVQFZigBfe4tEbwgCL5a2WZouTbRPpKIhIl3y3SnlUL3VLTR3c7-MjN8rr_r/exec';
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwLSLOrdq13EyO8NHRBfAbaPbZ3IpzhLPgnQZIx6ope2ys-1tQlQbywmrX2lbdfA-O9/exec';
 
 function callAPI(fnName) {
   var args = Array.prototype.slice.call(arguments, 1);
