@@ -972,7 +972,7 @@ function submitAddItem() {
   showLoading('กำลังบันทึก...');
   callAPI('addItem', AUTH.token, data).then(function(res) {
     hideLoading(); closeModal();
-    if (res.success) { showSuccess(res.message); renderItems(); }
+    if (res.success) { showSuccess(res.message); _itemsCacheTime = 0; renderItems(); }
     else showError(res.message);
   }).catch(function() { hideLoading(); showError('เกิดข้อผิดพลาด'); });
 }
@@ -982,7 +982,7 @@ function submitEditItem(id) {
   showLoading('กำลังบันทึก...');
   callAPI('updateItem', AUTH.token, id, data).then(function(res) {
     hideLoading(); closeModal();
-    if (res.success) { showSuccess(res.message); renderItems(); }
+    if (res.success) { showSuccess(res.message); _itemsCacheTime = 0; renderItems(); }
     else showError(res.message);
   }).catch(function() { hideLoading(); showError('เกิดข้อผิดพลาด'); });
 }
