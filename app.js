@@ -54,21 +54,17 @@ function showConfirm(title, text, cb, confirmText) {
 }
 
 // ===== MODAL =====
-function openModal(title, bodyHtml, footerHtml) {
+function openModal(title, bodyHtml, footerHtml, sizeClass) {
   document.getElementById('modalTitle').textContent = title;
   document.getElementById('modalBody').innerHTML = bodyHtml;
   document.getElementById('modalFooter').innerHTML = footerHtml || '';
+  document.getElementById('modalBox').className = 'bg-white rounded-2xl shadow-2xl w-full max-h-[90vh] flex flex-col ' + (sizeClass || 'max-w-lg');
   document.getElementById('modalOverlay').classList.remove('hidden');
 }
 function closeModal() {
   document.getElementById('modalOverlay').classList.add('hidden');
   document.getElementById('modalBody').innerHTML = '';
   document.getElementById('modalFooter').innerHTML = '';
-  setModalWidth('max-w-lg');
-}
-function setModalWidth(cls) {
-  var box = document.getElementById('modalBox');
-  if (box) box.className = box.className.replace(/max-w-\S+/, cls);
 }
 
 // ===== UTILITIES =====
@@ -87,9 +83,6 @@ function formatDateTime(iso) {
 function escHtml(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function tryParseJSON(str) {
-  try { return JSON.parse(str) || []; } catch(e) { return []; }
 }
 function togglePass(inputId, btn) {
   var inp = document.getElementById(inputId);
@@ -241,7 +234,7 @@ function loadPage(page) {
     dashboard:'ภาพรวมระบบ', stock:'สต็อกคงเหลือ', items:'รายการวัสดุ',
     receive:'รับวัสดุเข้าคลัง', stocktake:'นับสต็อก', printqr:'พิมพ์ QR สติ๊กเกอร์', withdraw:'เบิกวัสดุ', approve:'อนุมัติการเบิก',
     transactions:'ประวัติเคลื่อนไหว', reports:'รายงาน',
-    users:'จัดการผู้ใช้งาน', settings:'ตั้งค่าระบบ', profile:'โปรไฟล์'
+    users:'จัดการผู้ใช้งาน', settings:'ตั้งค่าระบบ', profile:'โปรไฟล์', manual:'คู่มือการใช้งาน'
   };
   document.getElementById('pageTitle').textContent = titles[page] || page;
   document.getElementById('pageBreadcrumb').textContent = 'ระบบวัสดุสิ้นเปลือง / ' + (titles[page] || page);
@@ -263,6 +256,7 @@ function loadPage(page) {
   else if (page === 'users')        renderUsers();
   else if (page === 'settings')     renderSettings();
   else if (page === 'profile')      renderProfile();
+  else if (page === 'manual')       renderManual();
 }
 
 function toggleSidebar() {
@@ -608,6 +602,8 @@ function buildItemsPage() {
   html += '<div class="relative"><i class="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>';
   html += '<input type="text" id="itemSearch" placeholder="ค้นหาวัสดุ..." value="' + escHtml(_itemsFilter.search) + '"';
   html += ' onkeyup="debounceItemFilter()" class="pl-9 pr-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-navy-500 w-48"></div>';
+  html += '<div class="relative"><i class="fi fi-rr-barcode-read absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>';
+  html += '<input type="text" id="itemBarcodeSearch" placeholder="ยิงบาร์โค้ดค้นหา..." onkeydown="handleItemBarcodeScan(event)" class="pl-9 pr-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-navy-500 w-48"></div>';
   html += '<select id="itemCatFilter" onchange="applyItemFilter()" class="border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-500">';
   html += '<option value="all">ทุกหมวดหมู่</option>';
   cats.forEach(function(c){ html += '<option value="' + escHtml(c) + '" ' + (_itemsFilter.category===c?'selected':'') + '>' + escHtml(c) + '</option>'; });
@@ -618,7 +614,6 @@ function buildItemsPage() {
   html += '<div class="flex gap-2">';
   html += '<button onclick="downloadCSVSample()" class="btn-secondary flex items-center gap-2 whitespace-nowrap btn-sm"><i class="fi fi-rr-download"></i> ไฟล์ตัวอย่าง</button>';
   html += '<button onclick="openImportCSVModal()" class="btn-success flex items-center gap-2 whitespace-nowrap btn-sm"><i class="fi fi-rr-upload"></i> นำเข้า CSV</button>';
-  html += '<button onclick="openMultiAddModal()" class="btn-secondary flex items-center gap-2 whitespace-nowrap btn-sm"><i class="fi fi-rr-add-document"></i> เพิ่มหลายรายการ</button>';
   html += '<button onclick="openAddItemModal()" class="btn-primary flex items-center gap-2 whitespace-nowrap"><i class="fi fi-rr-plus"></i> เพิ่มวัสดุใหม่</button></div></div>';
 
   html += '<div class="flex gap-2 flex-wrap text-xs">';
@@ -705,6 +700,18 @@ function getCategoryList(data) {
 }
 function paginate(data, page) {
   return data.slice((page-1)*ITEMS_PER_PAGE, page*ITEMS_PER_PAGE);
+}
+
+function handleItemBarcodeScan(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  var input = document.getElementById('itemBarcodeSearch');
+  var code = (input||{}).value||'';
+  if (!code.trim()) return;
+  var item = _itemsData.find(function(i){ return (i.barcode||'') === code.trim(); });
+  if (input) input.value = '';
+  if (item) showItemDetailModal(item.id);
+  else showError('ไม่พบวัสดุที่มีบาร์โค้ดนี้');
 }
 
 var _filterTimer;
@@ -823,114 +830,12 @@ function handleCSVImport() {
   });
 }
 
-// ===== เพิ่มวัสดุหลายรายการพร้อมกัน =====
-var _multiAddRowSeq = 0;
-function openMultiAddModal() {
-  _multiAddRowSeq = 0;
-  var body = '<div class="space-y-3">';
-  body += '<p class="text-sm text-gray-600">กรอกข้อมูลวัสดุหลายรายการ แล้วกด "บันทึกทั้งหมด" (ช่อง * จำเป็นต้องกรอก แถวที่เว้นว่างจะถูกข้าม)</p>';
-  body += '<div class="overflow-x-auto border border-gray-200 rounded-xl">';
-  body += '<table class="w-full text-sm">';
-  body += '<thead class="bg-gray-50 text-gray-600 text-xs"><tr>';
-  body += '<th class="px-2 py-2 text-center w-8">#</th>';
-  body += '<th class="px-2 py-2 text-left min-w-[140px]">ชื่อวัสดุ *</th>';
-  body += '<th class="px-2 py-2 text-left">ขนาดบรรจุ</th>';
-  body += '<th class="px-2 py-2 text-left">หน่วย *</th>';
-  body += '<th class="px-2 py-2 text-left">หมวดหมู่</th>';
-  body += '<th class="px-2 py-2 text-center">สต็อก</th>';
-  body += '<th class="px-2 py-2 text-center">ขั้นต่ำ</th>';
-  body += '<th class="px-2 py-2 w-8"></th>';
-  body += '</tr></thead>';
-  body += '<tbody id="multiAddBody"></tbody>';
-  body += '</table></div>';
-  body += '<button onclick="addMultiAddRow()" type="button" class="btn-secondary btn-sm"><i class="fi fi-rr-plus mr-1"></i>เพิ่มแถว</button>';
-  body += '</div>';
-  var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button>'
-    + '<button onclick="submitMultiAdd()" class="btn-primary"><i class="fi fi-rr-disk mr-1"></i>บันทึกทั้งหมด</button>';
-  openModal('เพิ่มวัสดุหลายรายการ', body, footer);
-  setModalWidth('max-w-5xl');
-  addMultiAddRow(); addMultiAddRow(); addMultiAddRow();
-}
-function addMultiAddRow() {
-  var tbody = document.getElementById('multiAddBody');
-  if (!tbody) return;
-  _multiAddRowSeq++;
-  var n = _multiAddRowSeq;
-  var inp = 'class="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-navy-500"';
-  var tr = document.createElement('tr');
-  tr.id = 'multiRow_' + n;
-  tr.className = 'border-t border-gray-100';
-  tr.innerHTML =
-      '<td class="px-2 py-1.5 text-gray-400 text-xs text-center multiRowNum"></td>'
-    + '<td class="px-2 py-1.5"><input type="text" data-f="name" ' + inp + '></td>'
-    + '<td class="px-2 py-1.5"><input type="text" data-f="size" ' + inp + '></td>'
-    + '<td class="px-2 py-1.5"><input type="text" data-f="unit" ' + inp + '></td>'
-    + '<td class="px-2 py-1.5"><input type="text" data-f="category" value="วัสดุทำความสะอาด" ' + inp + '></td>'
-    + '<td class="px-2 py-1.5"><input type="number" data-f="current_stock" value="0" style="width:64px" ' + inp + '></td>'
-    + '<td class="px-2 py-1.5"><input type="number" data-f="min_stock" value="5" style="width:64px" ' + inp + '></td>'
-    + '<td class="px-2 py-1.5 text-center"><button type="button" onclick="removeMultiAddRow(' + n + ')" class="w-7 h-7 bg-red-100 text-red-700 rounded-lg inline-flex items-center justify-center hover:bg-red-200"><i class="fi fi-rr-trash text-xs"></i></button></td>';
-  tbody.appendChild(tr);
-  renumberMultiAddRows();
-}
-function removeMultiAddRow(n) {
-  var tr = document.getElementById('multiRow_' + n);
-  if (tr) tr.parentNode.removeChild(tr);
-  renumberMultiAddRows();
-}
-function renumberMultiAddRows() {
-  var tbody = document.getElementById('multiAddBody');
-  if (!tbody) return;
-  Array.prototype.forEach.call(tbody.children, function(tr, i) {
-    var cell = tr.querySelector('.multiRowNum');
-    if (cell) cell.textContent = (i + 1);
-  });
-}
-function submitMultiAdd() {
-  var tbody = document.getElementById('multiAddBody');
-  if (!tbody) return;
-  var rows = [];
-  var rowNum = 0;
-  var errMsg = null;
-  Array.prototype.forEach.call(tbody.children, function(tr) {
-    rowNum++;
-    var get = function(f) { var el = tr.querySelector('[data-f="' + f + '"]'); return el ? el.value.trim() : ''; };
-    var name = get('name'), size = get('size'), unit = get('unit');
-    // ข้ามแถวที่เว้นว่างทั้งหมด
-    if (!name && !size && !unit) return;
-    if (errMsg) return;
-    if (!name) { errMsg = 'แถวที่ ' + rowNum + ': กรุณากรอกชื่อวัสดุ'; return; }
-    if (!unit) { errMsg = 'แถวที่ ' + rowNum + ': กรุณากรอกหน่วย'; return; }
-    rows.push({
-      name: name, size: size, unit: unit,
-      category: get('category'),
-      current_stock: parseInt(get('current_stock')) || 0,
-      min_stock: parseInt(get('min_stock')) || 5,
-      image_file_id: ''
-    });
-  });
-  if (errMsg) { showError(errMsg); return; }
-  if (rows.length === 0) { showError('กรุณากรอกข้อมูลอย่างน้อย 1 รายการ'); return; }
-  showConfirm('บันทึกหลายรายการ', 'ยืนยันเพิ่มวัสดุ ' + rows.length + ' รายการ?', function() {
-    showLoading('กำลังบันทึก ' + rows.length + ' รายการ...');
-    var promises = rows.map(function(d) { return callAPI('addItem', AUTH.token, d); });
-    Promise.all(promises).then(function(results) {
-      hideLoading(); closeModal();
-      var ok = results.filter(function(r) { return r && r.success; }).length;
-      var fail = results.length - ok;
-      if (fail > 0) showError('บันทึกสำเร็จ ' + ok + ' รายการ ล้มเหลว ' + fail + ' รายการ');
-      else showSuccess('บันทึกสำเร็จ ' + ok + ' รายการ');
-      _itemsCacheTime = 0;
-      renderItems();
-    }).catch(function() { hideLoading(); showError('เกิดข้อผิดพลาด'); });
-  });
-}
-
 function openAddItemModal() {
   _itemImageFileId = null;
   var body = itemFormHTML({});
   var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button>'
     + '<button onclick="submitAddItem()" class="btn-primary"><i class="fi fi-rr-plus mr-1"></i>เพิ่มวัสดุ</button>';
-  openModal('เพิ่มรายการวัสดุใหม่', body, footer);
+  openModal('เพิ่มรายการวัสดุใหม่', body, footer, 'max-w-2xl');
 }
 function openEditItemModal(id) {
   var item = _itemsData.find(function(i){ return i.id === id; });
@@ -939,7 +844,7 @@ function openEditItemModal(id) {
   var body = itemFormHTML(item);
   var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button>'
     + '<button onclick="submitEditItem(\'' + id + '\')" class="btn-primary"><i class="fi fi-rr-disk mr-1"></i>บันทึก</button>';
-  openModal('แก้ไขรายการวัสดุ', body, footer);
+  openModal('แก้ไขรายการวัสดุ', body, footer, 'max-w-2xl');
 }
 function itemFormHTML(item) {
   var fid = _itemImageFileId || item.image_file_id || '';
@@ -954,16 +859,31 @@ function itemFormHTML(item) {
     + fieldHTML('ชื่อวัสดุ *', 'itemName', 'text', item.name||'', 'sm:col-span-2')
     + fieldHTML('ขนาดบรรจุ', 'itemSize', 'text', item.size||'')
     + fieldHTML('หน่วย *', 'itemUnit', 'text', item.unit||'')
+    + barcodeFieldHTML(item.barcode||'')
     + fieldHTML('หมวดหมู่', 'itemCategory', 'text', item.category||'วัสดุทำความสะอาด')
+    + fieldHTML('ราคาต่อหน่วย', 'itemPrice', 'number', item.price||0, '', '0.01')
+    + fieldHTML('ผู้จำหน่าย/ซัพพลายเออร์', 'itemSupplier', 'text', item.supplier||'')
     + fieldHTML('สต็อกเริ่มต้น', 'itemStock', 'number', item.current_stock||0)
     + fieldHTML('สต็อกขั้นต่ำ', 'itemMinStock', 'number', item.min_stock||5)
+    + fieldHTML('ตำแหน่งจัดเก็บ', 'itemLocation', 'text', item.storage_location||'', 'sm:col-span-2')
+    + textareaFieldHTML('รายละเอียด/หมายเหตุ', 'itemDescription', item.description||'', 'sm:col-span-2')
     + imgSection
     + '</div>';
 }
-function fieldHTML(label, id, type, value, extra) {
+function fieldHTML(label, id, type, value, extra, step) {
   return '<div class="' + (extra||'') + '">'
     + '<label class="form-label">' + escHtml(label) + '</label>'
-    + '<input type="' + type + '" id="' + id + '" value="' + escHtml(String(value)) + '" class="form-input"></div>';
+    + '<input type="' + type + '" id="' + id + '"' + (step ? ' step="' + step + '" min="0"' : '') + ' value="' + escHtml(String(value)) + '" class="form-input"></div>';
+}
+function textareaFieldHTML(label, id, value, extra) {
+  return '<div class="' + (extra||'') + '">'
+    + '<label class="form-label">' + escHtml(label) + '</label>'
+    + '<textarea id="' + id + '" rows="2" class="form-input">' + escHtml(value||'') + '</textarea></div>';
+}
+function barcodeFieldHTML(value) {
+  return '<div><label class="form-label">บาร์โค้ด</label>'
+    + '<div class="relative"><i class="fi fi-rr-barcode-read absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>'
+    + '<input type="text" id="itemBarcode" value="' + escHtml(value) + '" placeholder="ยิงบาร์โค้ดหรือกรอกเลข..." class="form-input pl-9"></div></div>';
 }
 
 function submitAddItem() {
@@ -972,7 +892,7 @@ function submitAddItem() {
   showLoading('กำลังบันทึก...');
   callAPI('addItem', AUTH.token, data).then(function(res) {
     hideLoading(); closeModal();
-    if (res.success) { showSuccess(res.message); _itemsCacheTime = 0; renderItems(); }
+    if (res.success) { showSuccess(res.message); renderItems(); }
     else showError(res.message);
   }).catch(function() { hideLoading(); showError('เกิดข้อผิดพลาด'); });
 }
@@ -982,7 +902,7 @@ function submitEditItem(id) {
   showLoading('กำลังบันทึก...');
   callAPI('updateItem', AUTH.token, id, data).then(function(res) {
     hideLoading(); closeModal();
-    if (res.success) { showSuccess(res.message); _itemsCacheTime = 0; renderItems(); }
+    if (res.success) { showSuccess(res.message); renderItems(); }
     else showError(res.message);
   }).catch(function() { hideLoading(); showError('เกิดข้อผิดพลาด'); });
 }
@@ -994,6 +914,11 @@ function readItemForm() {
   return {
     name: name, size: (document.getElementById('itemSize')||{}).value||'',
     unit: unit, category: (document.getElementById('itemCategory')||{}).value||'',
+    barcode: (document.getElementById('itemBarcode')||{}).value||'',
+    price: parseFloat((document.getElementById('itemPrice')||{}).value)||0,
+    supplier: (document.getElementById('itemSupplier')||{}).value||'',
+    storage_location: (document.getElementById('itemLocation')||{}).value||'',
+    description: (document.getElementById('itemDescription')||{}).value||'',
     current_stock: parseInt((document.getElementById('itemStock')||{}).value)||0,
     min_stock: parseInt((document.getElementById('itemMinStock')||{}).value)||5,
     image_file_id: (document.getElementById('itemImageFileId')||{}).value||_itemImageFileId||''
@@ -1028,10 +953,15 @@ function removeItemImage() {
   var name = (document.getElementById('itemName')||{}).value||'';
   var size = (document.getElementById('itemSize')||{}).value||'';
   var unit = (document.getElementById('itemUnit')||{}).value||'';
+  var barcode = (document.getElementById('itemBarcode')||{}).value||'';
   var cat  = (document.getElementById('itemCategory')||{}).value||'';
+  var price = (document.getElementById('itemPrice')||{}).value||0;
+  var supplier = (document.getElementById('itemSupplier')||{}).value||'';
+  var location = (document.getElementById('itemLocation')||{}).value||'';
+  var description = (document.getElementById('itemDescription')||{}).value||'';
   var stock = (document.getElementById('itemStock')||{}).value||0;
   var min   = (document.getElementById('itemMinStock')||{}).value||5;
-  var fakeItem = {name:name, size:size, unit:unit, category:cat, current_stock:stock, min_stock:min, image_file_id:''};
+  var fakeItem = {name:name, size:size, unit:unit, barcode:barcode, category:cat, price:price, supplier:supplier, storage_location:location, description:description, current_stock:stock, min_stock:min, image_file_id:''};
   var body = itemFormHTML(fakeItem);
   document.getElementById('modalBody').innerHTML = body;
 }
@@ -1086,6 +1016,14 @@ function showItemDetailModal(itemId) {
     + '<span class="text-xs text-gray-400">ขั้นต่ำ: ' + item.min_stock + ' ' + item.unit + '</span>'
     + '<span class="px-2 py-0.5 rounded-full text-xs font-medium ' + sClass + '">' + sLabel + '</span>'
     + '</div></div>';
+
+  if (item.price || item.supplier || item.storage_location) {
+    body += '<div class="grid grid-cols-2 gap-3">';
+    if (item.price) body += '<div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xs text-gray-400 mb-1">ราคาต่อหน่วย</p><p class="text-sm font-semibold text-gray-700">' + Number(item.price).toLocaleString('th-TH', {minimumFractionDigits:2}) + ' บาท</p></div>';
+    if (item.storage_location) body += '<div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xs text-gray-400 mb-1">ตำแหน่งจัดเก็บ</p><p class="text-sm font-semibold text-gray-700">' + escHtml(item.storage_location) + '</p></div>';
+    if (item.supplier) body += '<div class="bg-gray-50 rounded-xl p-3 text-center col-span-2"><p class="text-xs text-gray-400 mb-1">ผู้จำหน่าย/ซัพพลายเออร์</p><p class="text-sm font-semibold text-gray-700">' + escHtml(item.supplier) + '</p></div>';
+    body += '</div>';
+  }
 
   if (item.description) {
     body += '<div class="bg-gray-50 rounded-xl p-3"><p class="text-xs text-gray-400 mb-1">หมายเหตุ / รายละเอียด</p><p class="text-sm text-gray-700">' + escHtml(item.description) + '</p></div>';
@@ -1322,16 +1260,88 @@ function buildReceivePage() {
 }
 
 function openReceiveModal(itemId) {
-  var body = '<div class="space-y-4">';
-  if (!itemId) {
-    body += '<div><label class="form-label">เลือกวัสดุ *</label><select id="recItemId" class="form-input">';
-    _itemsData.forEach(function(i){ body += '<option value="' + i.id + '">' + escHtml(i.name) + ' (คงเหลือ ' + i.current_stock + ' ' + i.unit + ')</option>'; });
-    body += '</select></div>';
-  } else {
-    var item = _itemsData.find(function(i){ return i.id === itemId; });
-    body += '<input type="hidden" id="recItemId" value="' + itemId + '">';
-    body += '<p class="text-sm text-gray-600">รายการ: <b>' + escHtml(item.name) + '</b> (คงเหลือ ' + item.current_stock + ' ' + item.unit + ')</p>';
+  if (itemId) { openReceiveDetailModal(itemId); return; }
+  _openRecSelect();
+}
+function _openRecSelect() {
+  var body = '<div class="space-y-3">'
+    + '<div><label class="form-label">ยิงบาร์โค้ด</label>'
+    + '<div class="relative"><i class="fi fi-rr-barcode-read absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>'
+    + '<input type="text" id="recItemBarcode" placeholder="ยิงบาร์โค้ดเพื่อค้นหาวัสดุ..." onkeydown="handleRecBarcodeScan(event)" class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-navy-500"></div></div>'
+    + '<div class="flex items-center justify-between">'
+    + '<label class="form-label mb-0">เลือกวัสดุ *</label>'
+    + '<button type="button" onclick="openAddItemInlineForReceive()" class="text-xs text-navy-600 hover:underline font-medium flex items-center gap-1"><i class="fi fi-rr-plus"></i>ไม่พบ? เพิ่มวัสดุใหม่</button>'
+    + '</div>'
+    + '<div class="relative"><i class="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>'
+    + '<input type="text" id="recItemSearch" placeholder="ค้นหาวัสดุ..." onkeyup="filterRecItemList()" class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-navy-500"></div>'
+    + '<div id="recItemList" class="max-h-72 overflow-y-auto space-y-1">' + buildRecItemList(_itemsData) + '</div>'
+    + '</div>';
+  openModal('เลือกวัสดุที่ต้องการรับเข้า', body, '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button>');
+}
+function openAddItemInlineForReceive(prefillBarcode) {
+  _itemImageFileId = null;
+  var body = itemFormHTML({ barcode: prefillBarcode || '' });
+  var footer = '<button onclick="_openRecSelect()" class="btn-secondary"><i class="fi fi-rr-arrow-left mr-1"></i>กลับ</button>'
+    + '<button onclick="submitAddItemForReceive()" class="btn-primary"><i class="fi fi-rr-plus mr-1"></i>เพิ่มวัสดุ</button>';
+  openModal('เพิ่มวัสดุใหม่', body, footer, 'max-w-2xl');
+}
+function submitAddItemForReceive() {
+  var data = readItemForm();
+  if (!data) return;
+  showLoading('กำลังบันทึก...');
+  callAPI('addItem', AUTH.token, data).then(function(res) {
+    hideLoading();
+    if (res.success) {
+      _itemsData.push(res.data);
+      _itemsCacheTime = Date.now();
+      showSuccess(res.message);
+      openReceiveDetailModal(res.data.id);
+    } else showError(res.message);
+  }).catch(function() { hideLoading(); showError('เกิดข้อผิดพลาด'); });
+}
+function buildRecItemList(data) {
+  if (data.length === 0) {
+    return '<div class="text-center py-6"><p class="text-sm text-gray-400 mb-3">ไม่พบรายการที่ค้นหา</p>'
+      + '<button onclick="openAddItemInlineForReceive()" class="btn-primary btn-sm"><i class="fi fi-rr-plus mr-1"></i>เพิ่มวัสดุใหม่</button></div>';
   }
+  return data.map(function(i) {
+    var imgUrlSrc = imgUrl(i.image_file_id);
+    var imgHtml = imgUrlSrc ? '<img src="' + imgUrlSrc + '" class="w-9 h-9 object-cover rounded-xl border border-gray-200 flex-shrink-0">' : '<div class="w-9 h-9 bg-navy-100 rounded-xl flex items-center justify-center flex-shrink-0"><i class="fi fi-rr-box-open-full text-navy-700 text-sm"></i></div>';
+    return '<div onclick="selectRecItem(\'' + i.id + '\')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-navy-50 border border-transparent hover:border-navy-200 transition">'
+      + imgHtml
+      + '<div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-700 truncate">' + escHtml(i.name) + '</p>'
+      + '<p class="text-xs text-gray-400">' + escHtml(i.item_code) + ' • ' + escHtml(i.size||'') + ' • คงเหลือ ' + i.current_stock + ' ' + i.unit + '</p></div></div>';
+  }).join('');
+}
+function filterRecItemList() {
+  var q = ((document.getElementById('recItemSearch')||{}).value||'').toLowerCase();
+  var filtered = _itemsData.filter(function(i){
+    return !q || i.name.toLowerCase().includes(q) || (i.item_code||'').toLowerCase().includes(q) || (i.barcode||'').toLowerCase().includes(q);
+  });
+  document.getElementById('recItemList').innerHTML = buildRecItemList(filtered);
+}
+function selectRecItem(id) { closeModal(); openReceiveDetailModal(id); }
+function handleRecBarcodeScan(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  var input = document.getElementById('recItemBarcode');
+  var code = (input||{}).value||'';
+  if (!code.trim()) return;
+  var scannedCode = code.trim();
+  var item = _itemsData.find(function(i){ return (i.barcode||'') === scannedCode; });
+  if (item) { closeModal(); openReceiveDetailModal(item.id); }
+  else {
+    showConfirm('ไม่พบวัสดุ', 'ไม่พบวัสดุที่มีบาร์โค้ด "' + scannedCode + '" ต้องการเพิ่มวัสดุใหม่หรือไม่?', function() {
+      openAddItemInlineForReceive(scannedCode);
+    }, 'เพิ่มวัสดุใหม่');
+  }
+}
+function openReceiveDetailModal(itemId) {
+  var item = _itemsData.find(function(i){ return i.id === itemId; });
+  if (!item) { showError('ไม่พบรายการวัสดุ'); return; }
+  var body = '<div class="space-y-4">';
+  body += '<input type="hidden" id="recItemId" value="' + itemId + '">';
+  body += '<p class="text-sm text-gray-600">รายการ: <b>' + escHtml(item.name) + '</b> (คงเหลือ ' + item.current_stock + ' ' + item.unit + ')</p>';
   body += fieldHTML('จำนวนที่รับ *', 'recQty', 'number', 1);
   body += fieldHTML('วันที่', 'recDate', 'date', new Date().toISOString().split('T')[0]);
   body += '<div class="sm:col-span-2"><label class="form-label">หมายเหตุ</label><textarea id="recNote" class="form-input" rows="2"></textarea></div>';
@@ -1563,9 +1573,7 @@ function buildWithdrawPage() {
   var html = '<div class="fade-in space-y-4">';
   html += '<div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">';
   html += '<h3 class="font-semibold text-gray-700 flex items-center gap-2"><i class="fi fi-rr-inbox-out text-navy-600"></i> รายการคำขอเบิกวัสดุ</h3>';
-  html += '<div class="flex gap-2">';
-  html += '<button onclick="openMultiWithdrawModal()" class="btn-secondary flex items-center gap-2 btn-sm"><i class="fi fi-rr-add-document"></i> เบิกหลายรายการ</button>';
-  html += '<button onclick="openWithdrawSelectModal()" class="btn-primary flex items-center gap-2"><i class="fi fi-rr-plus"></i> ยื่นคำขอเบิก</button></div></div>';
+  html += '<button onclick="openWithdrawSelectModal()" class="btn-primary flex items-center gap-2"><i class="fi fi-rr-plus"></i> ยื่นคำขอเบิก</button></div>';
 
   html += '<div class="flex gap-2 border-b">';
   ['all','pending','approved','rejected'].forEach(function(s) {
@@ -1593,19 +1601,12 @@ function buildWithdrawPage() {
     var badgeClass = w.status==='approved'?'badge-approved':w.status==='rejected'?'badge-rejected':'badge-pending';
     var statusLabel = { pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ปฏิเสธ' }[w.status]||w.status;
     html += '<tr>';
-    var batchItems = w.is_batch ? tryParseJSON(w.items_json) : null;
     html += '<td class="px-4 py-2.5 font-mono text-xs text-navy-700">' + escHtml(w.withdraw_no) + (w.via_qr?'<span class="ml-1 text-teal-600 text-xs" title="สแกน QR"><i class="fi fi-rr-qr-scan"></i></span>':'') + '</td>';
     html += '<td class="px-4 py-2.5 text-xs text-gray-500">' + formatDate(w.requested_at) + '</td>';
-    if (batchItems) {
-      html += '<td class="px-4 py-2.5 text-gray-700"><span class="font-medium">หลายรายการ (' + batchItems.length + ' รายการ)</span>';
-      html += '<div class="mt-1 space-y-0.5">' + batchItems.map(function(b){ return '<p class="text-xs text-gray-400">• ' + escHtml(b.item_name) + ' <span class="font-medium text-gray-600">x' + b.quantity + ' ' + escHtml(b.unit) + '</span></p>'; }).join('') + '</div></td>';
-      html += '<td class="px-4 py-2.5 text-center text-xs"><span class="text-gray-800 font-bold">' + batchItems.length + '</span> <span class="text-gray-400">รายการ</span></td>';
-    } else {
-      html += '<td class="px-4 py-2.5 font-medium text-gray-700 max-w-xs truncate">' + escHtml(w.item_name) + '</td>';
-      html += '<td class="px-4 py-2.5 text-center text-xs"><span class="text-gray-800 font-bold">' + w.quantity_requested + '</span>';
-      if (w.status==='approved') html += '<span class="text-green-600 ml-1">/' + w.quantity_approved + '</span>';
-      html += ' <span class="text-gray-400">' + escHtml(w.unit) + '</span></td>';
-    }
+    html += '<td class="px-4 py-2.5 font-medium text-gray-700 max-w-xs truncate">' + escHtml(w.item_name) + '</td>';
+    html += '<td class="px-4 py-2.5 text-center text-xs"><span class="text-gray-800 font-bold">' + w.quantity_requested + '</span>';
+    if (w.status==='approved') html += '<span class="text-green-600 ml-1">/' + w.quantity_approved + '</span>';
+    html += ' <span class="text-gray-400">' + escHtml(w.unit) + '</span></td>';
     html += '<td class="px-4 py-2.5 text-xs text-gray-500 max-w-xs truncate">' + escHtml(w.purpose||'-') + '</td>';
     html += '<td class="px-4 py-2.5 text-xs text-gray-600">' + escHtml(w.requested_by_name||'-') + '</td>';
     html += '<td class="px-4 py-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-medium ' + badgeClass + '">' + statusLabel + '</span></td>';
@@ -1630,11 +1631,9 @@ function buildWithdrawPage() {
   paged.forEach(function(w) {
     var badgeClass = w.status==='approved'?'badge-approved':w.status==='rejected'?'badge-rejected':'badge-pending';
     var statusLabel = { pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ปฏิเสธ' }[w.status]||w.status;
-    var batchMobile = w.is_batch ? tryParseJSON(w.items_json) : null;
     html += '<div class="card p-4 space-y-2">';
     html += '<div class="flex items-start justify-between">';
     html += '<div><p class="font-semibold text-gray-800 text-sm">' + escHtml(w.item_name) + '</p>';
-    if (batchMobile) html += '<div class="mt-1">' + batchMobile.map(function(b){ return '<p class="text-xs text-gray-400">• ' + escHtml(b.item_name) + ' x' + b.quantity + ' ' + escHtml(b.unit) + '</p>'; }).join('') + '</div>';
     html += '<p class="text-xs text-navy-700 font-mono">' + escHtml(w.withdraw_no) + '</p></div>';
     html += '<span class="px-2 py-0.5 rounded-full text-xs font-medium ' + badgeClass + '">' + statusLabel + '</span></div>';
     html += '<div class="grid grid-cols-2 gap-1 text-xs text-gray-500">';
@@ -1833,153 +1832,6 @@ function submitWithdraw() {
   }).catch(function() { hideLoading(); showError('เกิดข้อผิดพลาด'); });
 }
 
-// ===== เบิกหลายรายการพร้อมกัน =====
-var _mwSelected = {}; // { itemId: { item, qty } }
-
-function openMultiWithdrawModal() {
-  _mwSelected = {};
-  if (_itemsData.length === 0) {
-    showLoading('โหลด...');
-    callAPI('getItems', AUTH.token).then(function(res) {
-      hideLoading(); _itemsData = res.data||[]; _itemsCacheTime = Date.now();
-      _openMWStep1();
-    }).catch(function(){ hideLoading(); showError('โหลดข้อมูลไม่สำเร็จ'); });
-  } else {
-    _openMWStep1();
-  }
-}
-
-function _openMWStep1() {
-  var body = '<div class="space-y-3">';
-  body += '<p class="text-sm text-gray-500">เลือกรายการวัสดุที่ต้องการเบิก (เลือกได้หลายรายการ)</p>';
-  body += '<div class="relative"><i class="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>';
-  body += '<input type="text" id="mwItemSearch" placeholder="ค้นหาวัสดุ..." onkeyup="filterMWItemList()" class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-navy-500"></div>';
-  body += '<div id="mwItemList" class="max-h-72 overflow-y-auto space-y-1">' + buildMWItemList(_itemsData) + '</div>';
-  body += '<div id="mwSelCount" class="text-xs text-navy-700 font-medium"></div>';
-  body += '</div>';
-  var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button>'
-    + '<button onclick="_openMWStep2()" class="btn-primary"><i class="fi fi-rr-arrow-right mr-1"></i>ถัดไป</button>';
-  openModal('เบิกหลายรายการ — เลือกวัสดุ', body, footer);
-  setModalWidth('max-w-2xl');
-  _updateMWSelCount();
-}
-
-function buildMWItemList(data) {
-  if (data.length === 0) return '<p class="text-center text-sm text-gray-400 py-4">ไม่พบรายการ</p>';
-  return data.map(function(i) {
-    var sClass = getStockClass(i.current_stock, i.min_stock);
-    var checked = _mwSelected[i.id] ? 'checked' : '';
-    var imgUrlSrc = imgUrl(i.image_file_id);
-    var imgHtml = imgUrlSrc
-      ? '<img src="' + imgUrlSrc + '" class="w-9 h-9 object-cover rounded-xl border border-gray-200 flex-shrink-0">'
-      : '<div class="w-9 h-9 bg-navy-100 rounded-xl flex items-center justify-center flex-shrink-0"><i class="fi fi-rr-box-open-full text-navy-700 text-sm"></i></div>';
-    var disabled = i.current_stock <= 0 ? 'opacity-50 pointer-events-none' : '';
-    return '<label class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-navy-50 border border-transparent hover:border-navy-200 transition ' + disabled + '">'
-      + '<input type="checkbox" data-id="' + i.id + '" ' + checked + ' onchange="toggleMWItem(this)" class="w-4 h-4 accent-navy-700 flex-shrink-0">'
-      + imgHtml
-      + '<div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-700 truncate">' + escHtml(i.name) + '</p>'
-      + '<p class="text-xs text-gray-400">' + escHtml(i.item_code) + ' • ' + escHtml(i.size||'') + ' • คงเหลือ ' + i.current_stock + ' ' + escHtml(i.unit) + '</p></div>'
-      + '<span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ' + sClass + '">' + getStockLabel(i.current_stock, i.min_stock) + '</span>'
-      + '</label>';
-  }).join('');
-}
-
-function filterMWItemList() {
-  var q = (document.getElementById('mwItemSearch')||{}).value||'';
-  var filtered = _itemsData.filter(function(i){
-    return !q || i.name.toLowerCase().includes(q.toLowerCase()) || (i.item_code||'').toLowerCase().includes(q.toLowerCase());
-  });
-  document.getElementById('mwItemList').innerHTML = buildMWItemList(filtered);
-}
-
-function toggleMWItem(cb) {
-  var id = cb.getAttribute('data-id');
-  var item = _itemsData.find(function(i){ return i.id === id; });
-  if (!item) return;
-  if (cb.checked) {
-    _mwSelected[id] = { item: item, qty: 1 };
-  } else {
-    delete _mwSelected[id];
-  }
-  _updateMWSelCount();
-}
-
-function _updateMWSelCount() {
-  var el = document.getElementById('mwSelCount');
-  if (!el) return;
-  var count = Object.keys(_mwSelected).length;
-  el.textContent = count > 0 ? 'เลือกแล้ว ' + count + ' รายการ' : '';
-}
-
-function _openMWStep2() {
-  var ids = Object.keys(_mwSelected);
-  if (ids.length === 0) { showError('กรุณาเลือกรายการวัสดุอย่างน้อย 1 รายการ'); return; }
-
-  var body = '<div class="space-y-4">';
-  body += '<p class="text-sm text-gray-500">กรอกจำนวนสำหรับแต่ละรายการ</p>';
-  body += '<div class="overflow-x-auto border border-gray-200 rounded-xl"><table class="w-full text-sm">';
-  body += '<thead class="bg-gray-50 text-xs text-gray-600"><tr>';
-  body += '<th class="px-3 py-2 text-left">รายการวัสดุ</th>';
-  body += '<th class="px-3 py-2 text-center w-28">คงเหลือ</th>';
-  body += '<th class="px-3 py-2 text-center w-28">จำนวนเบิก *</th>';
-  body += '</tr></thead><tbody class="divide-y divide-gray-100">';
-  ids.forEach(function(id) {
-    var s = _mwSelected[id];
-    body += '<tr>';
-    body += '<td class="px-3 py-2.5 font-medium text-gray-700">' + escHtml(s.item.name) + '<br><span class="text-xs text-gray-400">' + escHtml(s.item.item_code) + '</span></td>';
-    body += '<td class="px-3 py-2.5 text-center text-xs text-gray-600">' + s.item.current_stock + ' ' + escHtml(s.item.unit) + '</td>';
-    body += '<td class="px-3 py-2.5"><input type="number" data-wdid="' + id + '" min="1" max="' + s.item.current_stock + '" value="1" class="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-navy-500"></td>';
-    body += '</tr>';
-  });
-  body += '</tbody></table></div>';
-  body += '<div><label class="form-label">วัตถุประสงค์ * <span class="text-gray-400 font-normal">(ใช้ร่วมกันทุกรายการ)</span></label>';
-  body += '<input type="text" id="mwPurpose" class="form-input" placeholder="ระบุวัตถุประสงค์..."></div>';
-  body += '<div><label class="form-label">หมายเหตุ</label><textarea id="mwNote" class="form-input" rows="2"></textarea></div>';
-  body += '</div>';
-  var footer = '<button onclick="_openMWStep1()" class="btn-secondary"><i class="fi fi-rr-arrow-left mr-1"></i>ย้อนกลับ</button>'
-    + '<button onclick="submitMultiWithdraw()" class="btn-primary"><i class="fi fi-rr-inbox-out mr-1"></i>ยื่นคำขอเบิก</button>';
-  openModal('เบิกหลายรายการ — กรอกจำนวน (' + ids.length + ' รายการ)', body, footer);
-  setModalWidth('max-w-2xl');
-}
-
-function submitMultiWithdraw() {
-  var purpose = (document.getElementById('mwPurpose')||{}).value||'';
-  var note    = (document.getElementById('mwNote')||{}).value||'';
-  if (!purpose.trim()) { showError('กรุณาระบุวัตถุประสงค์'); return; }
-
-  var rows = [];
-  var errMsg = null;
-  document.querySelectorAll('[data-wdid]').forEach(function(inp) {
-    if (errMsg) return;
-    var id = inp.getAttribute('data-wdid');
-    var s  = _mwSelected[id];
-    var qty = parseInt(inp.value)||0;
-    if (!s) return;
-    if (qty <= 0) { errMsg = 'กรุณาระบุจำนวนสำหรับ "' + s.item.name + '"'; return; }
-    if (qty > s.item.current_stock) { errMsg = '"' + s.item.name + '" คงเหลือเพียง ' + s.item.current_stock + ' ' + s.item.unit; return; }
-    rows.push({ item_id: id, quantity: qty, purpose: purpose, note: note, via_qr: false });
-  });
-  if (errMsg) { showError(errMsg); return; }
-  if (rows.length === 0) { showError('ไม่พบรายการที่จะยื่น'); return; }
-
-  showConfirm('ยืนยันยื่นคำขอเบิก', 'ยืนยันยื่นคำขอเบิก ' + rows.length + ' รายการ (1 ใบเบิก)?', function() {
-    showLoading('กำลังยื่นคำขอ...');
-    var batchPayload = {
-      items: rows.map(function(r){ return { item_id: r.item_id, quantity: r.quantity }; }),
-      purpose: purpose,
-      note: note
-    };
-    callAPI('addWithdrawalBatch', AUTH.token, batchPayload).then(function(res) {
-      hideLoading(); closeModal();
-      if (res.success) showSuccess('ยื่นคำขอ ' + res.withdraw_no + ' เรียบร้อย (' + rows.length + ' รายการ) รอการอนุมัติ');
-      else showError(res.message);
-      _mwSelected = {};
-      if (_currentPage === 'withdraw') renderWithdraw();
-      else if (_currentPage === 'dashboard') renderDashboard();
-    }).catch(function(){ hideLoading(); showError('เกิดข้อผิดพลาด'); });
-  });
-}
-
 // ===== APPROVE =====
 var _approveData = [];
 var _approvePage = 1;
@@ -2057,67 +1909,31 @@ function buildApprovePage(filterStatus) {
 }
 
 function openApproveModal(wdId, qty) {
-  var wd = (_approveData.find(function(w){ return w.id === wdId; }))
-        || (_wdData.find(function(w){ return w.id === wdId; }));
-  if (!wd) return;
-
-  // BATCH
-  if (wd.is_batch) {
-    var batchItems = tryParseJSON(wd.items_json);
-    var body = '<div class="space-y-3">';
-    body += '<p class="text-sm text-gray-600">ผู้ขอ: <b>' + escHtml(wd.requested_by_name) + '</b> • วัตถุประสงค์: ' + escHtml(wd.purpose||'-') + '</p>';
-    body += '<div class="border border-gray-200 rounded-xl overflow-hidden"><table class="w-full text-sm">';
-    body += '<thead class="bg-gray-50 text-xs text-gray-600"><tr><th class="px-3 py-2 text-left">รายการวัสดุ</th><th class="px-3 py-2 text-center">จำนวน</th><th class="px-3 py-2 text-center">หน่วย</th></tr></thead>';
-    body += '<tbody class="divide-y divide-gray-100">';
-    batchItems.forEach(function(b){
-      body += '<tr><td class="px-3 py-2 text-gray-700">' + escHtml(b.item_name) + '</td>'
-            + '<td class="px-3 py-2 text-center font-bold text-gray-800">' + b.quantity + '</td>'
-            + '<td class="px-3 py-2 text-center text-gray-500 text-xs">' + escHtml(b.unit) + '</td></tr>';
-    });
-    body += '</tbody></table></div>';
-    body += '<p class="text-xs text-gray-400">อนุมัติทั้งหมดตามจำนวนที่ขอ</p></div>';
-    var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button>'
-      + '<button onclick="doApprove(\'' + wdId + '\')" class="btn-success"><i class="fi fi-rr-check mr-1"></i>ยืนยันอนุมัติ (' + batchItems.length + ' รายการ)</button>';
-    openModal('อนุมัติการเบิก #' + wd.withdraw_no, body, footer);
-    return;
-  }
-
-  // SINGLE
-  var item = _itemsData.find(function(i){ return i.id === wd.item_id; });
+  var wd = _approveData.find(function(w){ return w.id === wdId; });
+  var item = wd && _itemsData.find(function(i){ return i.id === wd.item_id; });
   var img = item ? imgUrl(item.image_file_id) : '';
   var imgHtml = img ? '<div class="flex justify-center"><img src="' + img + '" class="w-24 h-24 object-cover rounded-xl border border-gray-200 shadow-sm"></div>' : '';
   var body = '<div class="space-y-4">';
   body += imgHtml;
-  body += '<div class="text-center"><p class="font-semibold text-gray-800">' + escHtml(wd.item_name || '-') + '</p>';
-  body += '<p class="text-xs text-gray-500">ผู้ขอเบิก: <b>' + escHtml(wd.requested_by_name || '-') + '</b> • วัตถุประสงค์: ' + escHtml(wd.purpose || '-') + '</p></div>';
+  body += '<div class="text-center"><p class="font-semibold text-gray-800">' + escHtml((wd && wd.item_name) || '-') + '</p>';
+  body += '<p class="text-xs text-gray-500">ผู้ขอเบิก: <b>' + escHtml((wd && wd.requested_by_name) || '-') + '</b> • วัตถุประสงค์: ' + escHtml((wd && wd.purpose) || '-') + '</p></div>';
   body += '<div><label class="form-label">จำนวนที่อนุมัติ *</label>';
   body += '<input type="number" id="approveQty" value="' + qty + '" min="1" max="' + qty + '" class="form-input">';
-  body += '<p class="text-xs text-gray-400 mt-1">จำนวนที่ขอ: ' + qty + ' ' + escHtml(wd.unit || '') + '</p></div></div>';
+  body += '<p class="text-xs text-gray-400 mt-1">จำนวนที่ขอ: ' + qty + ' ' + escHtml((wd && wd.unit) || '') + '</p></div></div>';
   var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button>'
     + '<button onclick="doApprove(\'' + wdId + '\')" class="btn-success"><i class="fi fi-rr-check mr-1"></i>ยืนยันอนุมัติ</button>';
   openModal('อนุมัติการเบิก', body, footer);
 }
 
 function doApprove(wdId) {
-  var wd = (_approveData.find(function(w){ return w.id === wdId; }))
-        || (_wdData.find(function(w){ return w.id === wdId; }));
-  var isBatch = wd && wd.is_batch;
-  var qty;
-  if (isBatch) {
-    qty = wd.quantity_requested;
-  } else {
-    qty = parseInt((document.getElementById('approveQty')||{}).value||0);
-    if (!qty || qty <= 0) { showError('กรุณาระบุจำนวน'); return; }
-  }
+  var qty = parseInt((document.getElementById('approveQty')||{}).value||0);
+  if (!qty || qty <= 0) { showError('กรุณาระบุจำนวน'); return; }
   closeModal();
   showLoading('กำลังอนุมัติ...');
   callAPI('approveWithdrawal', AUTH.token, wdId, qty).then(function(res) {
     hideLoading();
-    if (res.success) {
-      showSuccess(res.message);
-      if (_currentPage === 'approve') renderApprove();
-      else if (_currentPage === 'withdraw') renderWithdraw();
-    } else showError(res.message);
+    if (res.success) { showSuccess(res.message); renderApprove(); }
+    else showError(res.message);
   }).catch(function() { hideLoading(); showError('เกิดข้อผิดพลาด'); });
 }
 
@@ -2498,8 +2314,16 @@ function exportMonthlyExcel(year, month) {
     hideLoading();
     if (!res.success) { showError(res.message); return; }
     var data = res.data || [];
-    var headers = [{key:'item_name',title:'ชื่อวัสดุ'},{key:'total_requested',title:'จำนวนขอเบิก'},{key:'total_approved',title:'จำนวนอนุมัติ'}];
-    var rows = data.map(function(d){ return {item_name:d.item_name||'', total_requested:d.total_requested||0, total_approved:d.total_approved||0}; });
+    var daysInMonth = new Date(year, month, 0).getDate();
+    var headers = [{key:'name',title:'ชื่อวัสดุ'},{key:'unit',title:'หน่วย'},{key:'received',title:'รับเข้า'}];
+    for (var d = 1; d <= daysInMonth; d++) headers.push({key:'d' + d, title:String(d)});
+    headers.push({key:'total_withdraw',title:'รวมเบิก'});
+    headers.push({key:'current_stock',title:'คงเหลือ'});
+    var rows = data.map(function(row) {
+      var obj = { name:row.name || '', unit:row.unit || '', received:row.received || 0, total_withdraw:row.total_withdraw || 0, current_stock:row.current_stock || 0 };
+      for (var d = 1; d <= daysInMonth; d++) obj['d' + d] = row.daily[d] || 0;
+      return obj;
+    });
     downloadXlsx(rows, headers, 'รายงานเบิก_' + month + '_' + (year+543));
   }).catch(function() { hideLoading(); showError('Export ไม่สำเร็จ'); });
 }
@@ -2972,6 +2796,191 @@ function stopQRScanner() {
   if (_qrScanner) {
     _qrScanner.stop().then(function() { _qrScanner = null; }).catch(function() { _qrScanner = null; });
   }
+}
+
+// ===== MANUAL / คู่มือการใช้งาน =====
+function renderManual() {
+  var isAdmin = AUTH.user.role === 'admin';
+  var toc = [
+    ['m-overview','fi-rr-info','ภาพรวมระบบ'],
+    ['m-login','fi-rr-sign-in','การเข้าสู่ระบบ'],
+    ['m-roles','fi-rr-users','บทบาทผู้ใช้'],
+    ['m-stock','fi-rr-layers','สต็อก & รายการวัสดุ'],
+    ['m-receive','fi-rr-inbox-in','รับวัสดุเข้าคลัง'],
+    ['m-stocktake','fi-rr-clipboard-list','นับสต็อก'],
+    ['m-printqr','fi-rr-print','พิมพ์ QR สติ๊กเกอร์'],
+    ['m-withdraw','fi-rr-inbox-out','เบิกวัสดุ & อนุมัติ'],
+    ['m-transactions','fi-rr-time-past','ประวัติเคลื่อนไหว'],
+    ['m-reports','fi-rr-chart-histogram','รายงาน'],
+    ['m-admin','fi-rr-settings','ผู้ใช้งาน & ตั้งค่าระบบ'],
+    ['m-profile','fi-rr-user','โปรไฟล์ของฉัน'],
+    ['m-faq','fi-rr-interrogation','คำถามที่พบบ่อย']
+  ];
+  var tocLinks = toc.map(function(t) {
+    return '<a href="#' + t[0] + '" class="nav-link"><i class="fi ' + t[1] + '"></i>' + t[2] + '</a>';
+  }).join('');
+
+  var html = '<div class="fade-in flex flex-col lg:flex-row gap-6 items-start">';
+
+  html += '<div class="hidden lg:block w-64 flex-shrink-0"><div class="toc-sticky card p-3">';
+  html += '<p class="font-bold text-gray-700 text-sm mb-2 px-1 flex items-center gap-2"><i class="fi fi-rr-list text-navy-600"></i>สารบัญ</p>';
+  html += '<nav class="manual-nav flex flex-col gap-0.5">' + tocLinks + '</nav>';
+  html += '</div></div>';
+
+  html += '<div class="lg:hidden w-full">';
+  html += '<details class="card p-3"><summary class="font-bold text-gray-700 text-sm cursor-pointer flex items-center gap-2"><i class="fi fi-rr-list text-navy-600"></i>สารบัญ</summary>';
+  html += '<nav class="manual-nav flex flex-col gap-0.5 mt-2">' + tocLinks + '</nav></details></div>';
+
+  html += '<div class="flex-1 min-w-0 w-full space-y-4">';
+
+  // 1. ภาพรวมระบบ
+  html += manualSection('m-overview', 'fi-rr-info', '1. ภาพรวมระบบ',
+    '<p class="mb-3">ระบบวัสดุสิ้นเปลือง ใช้บริหารจัดการคลังวัสดุตั้งแต่การรับเข้า เบิกจ่าย นับสต็อก ไปจนถึงการอนุมัติและออกรายงาน รองรับการใช้งานผ่านมือถือและคอมพิวเตอร์</p>'
+    + '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">'
+    + manualFeatureCard('fi-rr-box-alt', 'บริหารคลังวัสดุ', 'รับเข้า นับสต็อก พิมพ์ QR ติดฉลาก')
+    + manualFeatureCard('fi-rr-inbox-out', 'เบิก-อนุมัติ', 'พนักงานยื่นคำขอ เจ้าหน้าที่/ผู้ดูแลอนุมัติ')
+    + manualFeatureCard('fi-rr-chart-histogram', 'ติดตาม & รายงาน', 'ดูภาพรวม แจ้งเตือนสต็อกต่ำ ออกรายงาน')
+    + '</div>'
+    + '<div class="tip-box mt-3 text-sm"><i class="fi fi-rr-bulb text-navy-700 mr-1"></i>ทุกหน้าจอเข้าถึงได้จากเมนูด้านซ้าย และมีช่อง <strong>ค้นหาวัสดุเร็ว</strong> ที่แถบด้านบนของทุกหน้า</div>');
+
+  // 2. การเข้าสู่ระบบ
+  html += manualSection('m-login', 'fi-rr-sign-in', '2. การเข้าสู่ระบบ',
+    manualStep(1, 'เลือกประเภทผู้ใช้', 'เลือกแท็บ ผู้ดูแลระบบ / เจ้าหน้าที่ / พนักงาน ให้ตรงกับบัญชีของท่าน')
+    + manualStep(2, 'กรอกชื่อผู้ใช้และรหัสผ่าน', 'กรอกข้อมูลแล้วกด "เข้าสู่ระบบ" หรือกด Enter ที่ช่องรหัสผ่าน')
+    + manualStep(3, 'ลืมรหัสผ่าน', 'กด "ลืมรหัสผ่าน?" ใต้ปุ่มเข้าสู่ระบบ แล้วกรอกอีเมลที่ลงทะเบียนไว้เพื่อรับรหัสผ่านชั่วคราว')
+    + '<div class="tip-box mt-3 text-sm"><i class="fi fi-rr-bulb text-navy-700 mr-1"></i>หลังเข้าสู่ระบบสามารถกดชื่อ/ไอคอนโปรไฟล์มุมขวาบน หรือด้านล่างเมนู เพื่อ<strong>ออกจากระบบ</strong>ได้ทุกเมื่อ</div>');
+
+  // 3. บทบาทผู้ใช้
+  html += manualSection('m-roles', 'fi-rr-users', '3. บทบาทผู้ใช้',
+    '<p class="text-sm text-gray-500 mb-3">ระบบมี 3 บทบาท แต่ละบทบาทเห็นเมนูและทำได้ต่างกัน</p>'
+    + '<div class="overflow-x-auto"><table class="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">'
+    + '<thead class="bg-navy-700 text-white text-xs"><tr><th class="px-3 py-2 text-left">บทบาท</th><th class="px-3 py-2 text-left">เมนูที่เห็น</th><th class="px-3 py-2 text-left">สิทธิ์เด่น</th></tr></thead>'
+    + '<tbody class="divide-y divide-gray-100">'
+    + '<tr><td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-navy-100 text-navy-700">ผู้ดูแลระบบ</span></td>'
+    + '<td class="px-3 py-2">ทุกเมนู</td><td class="px-3 py-2">จัดการรายการวัสดุ, อนุมัติ/ปฏิเสธการเบิก, จัดการผู้ใช้งาน, ตั้งค่าระบบ</td></tr>'
+    + '<tr><td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">เจ้าหน้าที่</span></td>'
+    + '<td class="px-3 py-2">คลังวัสดุ (ยกเว้นรายการวัสดุ), การเบิก, รายงาน</td><td class="px-3 py-2">รับวัสดุเข้าคลัง, นับสต็อก, พิมพ์ QR, ยื่นคำขอเบิก, ดูรายงาน</td></tr>'
+    + '<tr><td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">พนักงาน</span></td>'
+    + '<td class="px-3 py-2">ภาพรวมระบบ, สต็อกคงเหลือ, เบิกวัสดุ, ประวัติเคลื่อนไหว</td><td class="px-3 py-2">ดูสต็อก, ยื่นคำขอเบิกวัสดุ, ดูประวัติของตนเอง</td></tr>'
+    + '</tbody></table></div>'
+    + '<div class="tip-box mt-3 text-sm"><i class="fi fi-rr-bulb text-navy-700 mr-1"></i>เฉพาะ <strong>ผู้ดูแลระบบ</strong> เท่านั้นที่อนุมัติ/ปฏิเสธคำขอเบิกและจัดการผู้ใช้งาน/ตั้งค่าระบบได้</div>');
+
+  // 4. สต็อก & รายการวัสดุ
+  html += manualSection('m-stock', 'fi-rr-layers', '4. สต็อกคงเหลือ & รายการวัสดุ',
+    '<p class="text-sm text-gray-500 mb-2">เมนู <strong>สต็อกคงเหลือ</strong> แสดงจำนวนวัสดุปัจจุบันทุกรายการ พร้อมสถานะสี:</p>'
+    + '<div class="flex flex-wrap gap-2 mb-3">'
+    + '<span class="px-3 py-1 rounded-full text-xs font-medium stock-ok">ปกติ</span>'
+    + '<span class="px-3 py-1 rounded-full text-xs font-medium stock-low">ใกล้หมด</span>'
+    + '<span class="px-3 py-1 rounded-full text-xs font-medium stock-critical">วิกฤต/หมด</span>'
+    + '</div>'
+    + '<p class="text-sm text-gray-500 mb-1">เมื่อมีวัสดุใกล้หมด ระบบจะแสดง<strong>ตัวเลขแจ้งเตือนสีเหลือง</strong>กำกับที่เมนู "สต็อกคงเหลือ" ในแถบด้านซ้ายโดยอัตโนมัติ</p>'
+    + '<h4 class="font-semibold text-gray-700 text-sm mt-4 mb-2">รายการวัสดุ <span class="text-xs text-gray-400 font-normal">(เฉพาะผู้ดูแลระบบ)</span></h4>'
+    + '<p class="text-sm text-gray-500">เมนู <strong>รายการวัสดุ</strong> ใช้เพิ่ม/แก้ไข/ปิดใช้งานวัสดุ กำหนดรหัสวัสดุ ชื่อ หน่วยนับ หมวดหมู่ รูปภาพ และจุดสั่งซื้อ (จุดที่ถือว่าใกล้หมด)</p>');
+
+  // 5. รับวัสดุเข้าคลัง
+  html += manualSection('m-receive', 'fi-rr-inbox-in', '5. รับวัสดุเข้าคลัง',
+    '<p class="text-sm text-gray-500 mb-2">ใช้เมื่อมีวัสดุใหม่ส่งเข้าคลัง (เจ้าหน้าที่ขึ้นไป)</p>'
+    + manualStep(1, 'เปิดเมนู "รับวัสดุเข้าคลัง"', 'เลือกวัสดุจากรายการที่มีอยู่')
+    + manualStep(2, 'กรอกจำนวนที่รับเข้า', 'ระบุจำนวนและรายละเอียดที่เกี่ยวข้อง (เช่น ผู้ส่ง/เลขที่เอกสาร ถ้ามี)')
+    + manualStep(3, 'บันทึก', 'ระบบจะบวกยอดเข้าสต็อกทันที และบันทึกลงประวัติเคลื่อนไหวประเภท "รับเข้า"'));
+
+  // 6. นับสต็อก
+  html += manualSection('m-stocktake', 'fi-rr-clipboard-list', '6. นับสต็อก',
+    '<p class="text-sm text-gray-500 mb-2">ใช้ตรวจนับวัสดุจริงเทียบกับยอดในระบบ (สต็อกจริง)</p>'
+    + manualStep(1, 'เปิดเมนู "นับสต็อก"', 'จะเห็นตารางวัสดุทั้งหมดพร้อมยอด "ระบบ" ปัจจุบัน')
+    + manualStep(2, 'กรอกจำนวนที่นับได้จริง', 'ในช่อง "นับจริง" ของแต่ละแถว ระบบจะคำนวณ "ผลต่าง" ให้ทันที (สีเขียว = เกิน, สีแดง = ขาด)')
+    + manualStep(3, 'กด "บันทึกการปรับยอด"', 'ระบบจะปรับยอดสต็อกเฉพาะรายการที่มีผลต่างเท่านั้น')
+    + '<div class="warn-box mt-3 text-sm"><i class="fi fi-rr-triangle-warning text-amber-600 mr-1"></i>การปรับยอดจากหน้านี้จะเขียนทับยอดสต็อกปัจจุบันทันที ควรตรวจนับให้ถูกต้องก่อนบันทึก</div>');
+
+  // 7. พิมพ์ QR สติ๊กเกอร์
+  html += manualSection('m-printqr', 'fi-rr-print', '7. พิมพ์ QR สติ๊กเกอร์',
+    '<p class="text-sm text-gray-500 mb-2">สร้างและพิมพ์สติ๊กเกอร์ QR สำหรับติดที่ตัววัสดุ/ชั้นวาง เพื่อให้พนักงานสแกนยื่นคำขอเบิกได้รวดเร็ว</p>'
+    + manualStep(1, 'ค้นหา/กรองวัสดุ', 'ใช้ช่องค้นหาหรือกรองตามหมวดหมู่เพื่อเลือกวัสดุที่ต้องการ')
+    + manualStep(2, 'เลือกวัสดุที่ต้องการพิมพ์', 'เลือกได้ทีละหลายรายการ')
+    + manualStep(3, 'พิมพ์', 'ระบบจะสร้าง QR Code ต่อรายการสำหรับสั่งพิมพ์')
+    + '<div class="tip-box mt-3 text-sm"><i class="fi fi-rr-bulb text-navy-700 mr-1"></i>การสแกน QR ที่ติดไว้จะเปิดหน้าเบิกวัสดุพร้อมเลือกวัสดุนั้นให้อัตโนมัติ (รายการที่เบิกผ่าน QR จะมีไอคอน <i class="fi fi-rr-qr-scan"></i> กำกับในประวัติ)</div>');
+
+  // 8. เบิกวัสดุ & อนุมัติ
+  html += manualSection('m-withdraw', 'fi-rr-inbox-out', '8. เบิกวัสดุ & อนุมัติการเบิก',
+    '<h4 class="font-semibold text-gray-700 text-sm mb-2">8.1 ยื่นคำขอเบิก (ทุกบทบาท)</h4>'
+    + manualStep(1, 'เปิดเมนู "เบิกวัสดุ" แล้วกด "ยื่นคำขอเบิก"', 'หรือสแกน QR สติ๊กเกอร์ที่ติดบนวัสดุ')
+    + manualStep(2, 'เลือกวัสดุและระบุจำนวน + วัตถุประสงค์', 'กดยืนยันเพื่อส่งคำขอ สถานะเริ่มต้นคือ "รออนุมัติ"')
+    + manualStep(3, 'ติดตามสถานะ', 'ดูสถานะได้ที่แท็บ ทั้งหมด/รออนุมัติ/อนุมัติแล้ว/ปฏิเสธ ในหน้าเดียวกัน — คำขอที่ยังรออนุมัติและเป็นของตนเองสามารถกด "ยกเลิก" ได้')
+    + '<h4 class="font-semibold text-gray-700 text-sm mt-4 mb-2">8.2 อนุมัติการเบิก <span class="text-xs text-gray-400 font-normal">(เฉพาะผู้ดูแลระบบ)</span></h4>'
+    + '<p class="text-sm text-gray-500 mb-2">เมนู <strong>อนุมัติการเบิก</strong> จะมีตัวเลขสีแดงกำกับจำนวนคำขอที่รออนุมัติ</p>'
+    + manualStep(1, 'เปิดคำขอที่สถานะ "รออนุมัติ"', 'ตรวจสอบจำนวนที่ขอและวัตถุประสงค์')
+    + manualStep(2, 'กด "อนุมัติ"', 'ระบุจำนวนที่อนุมัติจริง (อาจน้อยกว่าที่ขอได้) ระบบจะตัดสต็อกทันทีเมื่ออนุมัติ')
+    + manualStep(3, 'หรือกด "ปฏิเสธ"', 'ระบุเหตุผลการปฏิเสธ (ถ้ามี) — สต็อกจะไม่ถูกตัด')
+    + '<div class="warn-box mt-3 text-sm"><i class="fi fi-rr-triangle-warning text-amber-600 mr-1"></i>การอนุมัติจะตัดยอดสต็อกทันทีและไม่สามารถยกเลิกย้อนหลังได้ ควรตรวจสอบยอดคงเหลือก่อนกดอนุมัติ</div>');
+
+  // 9. ประวัติเคลื่อนไหว
+  html += manualSection('m-transactions', 'fi-rr-time-past', '9. ประวัติเคลื่อนไหว',
+    '<p class="text-sm text-gray-500 mb-2">เมนู <strong>ประวัติเคลื่อนไหว</strong> รวมทุกความเคลื่อนไหวของสต็อกไว้ในที่เดียว แบ่งเป็น 2 ประเภทหลัก:</p>'
+    + '<div class="flex flex-wrap gap-2">'
+    + '<span class="px-3 py-1 rounded-full text-xs font-medium badge-receive">รับเข้า</span>'
+    + '<span class="px-3 py-1 rounded-full text-xs font-medium badge-withdraw">เบิกออก</span>'
+    + '</div>'
+    + '<p class="text-sm text-gray-500 mt-2">ใช้สำหรับตรวจสอบย้อนหลังว่าใครรับ/เบิกวัสดุใด จำนวนเท่าไร และเมื่อใด</p>');
+
+  // 10. รายงาน
+  html += manualSection('m-reports', 'fi-rr-chart-histogram', '10. รายงาน',
+    '<p class="text-sm text-gray-500 mb-2">เมนู <strong>รายงาน</strong> (เจ้าหน้าที่ขึ้นไป) สรุปข้อมูลการรับ-เบิกวัสดุในรูปแบบกราฟและตาราง เพื่อใช้วางแผนสั่งซื้อและติดตามการใช้วัสดุ</p>'
+    + '<div class="tip-box text-sm"><i class="fi fi-rr-bulb text-navy-700 mr-1"></i>สามารถส่งออกข้อมูลเป็นไฟล์ Excel เพื่อนำไปวิเคราะห์หรือจัดเก็บเพิ่มเติมได้</div>');
+
+  // 11. ผู้ใช้งาน & ตั้งค่าระบบ
+  html += manualSection('m-admin', 'fi-rr-settings', '11. ผู้ใช้งาน & ตั้งค่าระบบ',
+    '<p class="text-xs text-gray-400 mb-3">เมนูในกลุ่มนี้แสดงเฉพาะบทบาท "ผู้ดูแลระบบ"</p>'
+    + '<h4 class="font-semibold text-gray-700 text-sm mb-2">11.1 ผู้ใช้งาน</h4>'
+    + '<p class="text-sm text-gray-500 mb-3">เพิ่ม/แก้ไขบัญชีผู้ใช้ กำหนดชื่อผู้ใช้ รหัสผ่านเริ่มต้น และบทบาท (ผู้ดูแลระบบ / เจ้าหน้าที่ / พนักงาน)</p>'
+    + '<h4 class="font-semibold text-gray-700 text-sm mb-2">11.2 ตั้งค่าระบบ</h4>'
+    + '<p class="text-sm text-gray-500">ปรับชื่อระบบ โลโก้ และค่าตั้งต้นอื่น ๆ ของระบบ</p>');
+
+  // 12. โปรไฟล์
+  html += manualSection('m-profile', 'fi-rr-user', '12. โปรไฟล์ของฉัน',
+    '<p class="text-sm text-gray-500 mb-2">คลิกชื่อ/ไอคอนผู้ใช้ที่มุมล่างซ้ายของแถบเมนู (หรือไอคอนโปรไฟล์มุมขวาบน) เพื่อเข้าหน้าโปรไฟล์</p>'
+    + '<ul class="list-disc pl-5 text-sm text-gray-500 space-y-1">'
+    + '<li>แก้ไขชื่อ-นามสกุล อีเมล เบอร์โทรศัพท์</li>'
+    + '<li>ตั้งค่า Telegram Chat ID เพื่อรับการแจ้งเตือนส่วนตัว</li>'
+    + '<li>เปลี่ยนรหัสผ่านด้วยตนเอง</li>'
+    + '</ul>');
+
+  // 13. FAQ
+  html += manualSection('m-faq', 'fi-rr-interrogation', '13. คำถามที่พบบ่อย',
+    manualFaq('ลืมรหัสผ่านต้องทำอย่างไร?', 'กด "ลืมรหัสผ่าน?" ที่หน้าเข้าสู่ระบบ แล้วกรอกอีเมลที่ลงทะเบียนไว้เพื่อรับรหัสผ่านชั่วคราว')
+    + manualFaq('เบิกวัสดุแล้วสถานะ "รออนุมัติ" ค้างนานทำอย่างไร?', 'ติดต่อผู้ดูแลระบบให้ตรวจสอบที่เมนู "อนุมัติการเบิก" หรือหากคำขอเป็นของตนเองและยังรออนุมัติ สามารถกด "ยกเลิก" แล้วยื่นใหม่ได้')
+    + manualFaq('ทำไมไม่เห็นเมนู "รายการวัสดุ" หรือ "จัดการระบบ"?', 'เมนูเหล่านี้จำกัดสิทธิ์เฉพาะบทบาท "ผู้ดูแลระบบ" เท่านั้น หากจำเป็นต้องใช้งานให้ติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์')
+    + manualFaq('ตัวเลขสีแดง/เหลืองที่เมนูคืออะไร?', 'สีแดงที่เมนู "อนุมัติการเบิก" คือจำนวนคำขอที่รออนุมัติ ส่วนสีเหลืองที่เมนู "สต็อกคงเหลือ" คือจำนวนวัสดุที่ใกล้หมด/หมดสต็อก')
+    + manualFaq('พิมพ์ QR แล้วใช้งานอย่างไร?', 'นำสติ๊กเกอร์ไปติดที่ตัววัสดุหรือชั้นวาง เมื่อต้องการเบิกให้ใช้กล้องสแกน QR ในหน้าเบิกวัสดุ ระบบจะเลือกวัสดุนั้นให้อัตโนมัติ'));
+
+  html += '</div></div>';
+  document.getElementById('mainContent').innerHTML = html;
+}
+
+function manualSection(id, icon, title, bodyHtml) {
+  return '<div class="card overflow-hidden" id="' + id + '">'
+    + '<div class="bg-navy-700 text-white px-5 py-3 flex items-center gap-2">'
+    + '<i class="fi ' + icon + '"></i><h3 class="font-bold text-sm">' + title + '</h3></div>'
+    + '<div class="card-body text-sm text-gray-700">' + bodyHtml + '</div></div>';
+}
+
+function manualFeatureCard(icon, title, desc) {
+  return '<div class="border border-gray-200 rounded-xl p-4 text-center">'
+    + '<i class="fi ' + icon + ' text-navy-600 text-2xl"></i>'
+    + '<p class="font-semibold text-gray-800 text-sm mt-2">' + title + '</p>'
+    + '<p class="text-xs text-gray-500 mt-1">' + desc + '</p></div>';
+}
+
+function manualStep(n, title, desc) {
+  return '<div class="step-row"><span class="step-badge">' + n + '</span>'
+    + '<div><div class="font-semibold text-gray-800 text-sm">' + title + '</div>'
+    + '<div class="text-xs text-gray-500 mt-0.5">' + desc + '</div></div></div>';
+}
+
+function manualFaq(q, a) {
+  return '<details class="border-b border-gray-100 py-2 last:border-b-0">'
+    + '<summary class="font-semibold text-gray-800 text-sm cursor-pointer flex items-center gap-2">'
+    + '<i class="fi fi-rr-question-square text-navy-600"></i>' + q + '</summary>'
+    + '<p class="text-xs text-gray-500 mt-2 pl-6">' + a + '</p></details>';
 }
 
 // ===== ON LOAD =====
